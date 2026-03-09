@@ -1,0 +1,27 @@
+# Credentials - NEVER COMMIT
+.env
+*.pem
+kalshi_private_key.pem
+kalshi_auth.py
+
+# Personal data
+TRADE_LOG.md
+TRADING_JOURNAL.md
+position_state.json
+daily_report.txt
+*_history.json
+nws_tracking.json
+bias_model*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
