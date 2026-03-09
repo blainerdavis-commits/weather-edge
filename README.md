@@ -1,163 +1,154 @@
-# Weather Edge Scanner 🌡️
+# Kalshi Weather Edge System v2
 
-Find mispriced Kalshi weather contracts by comparing market prices to NWS forecasts.
+Multi-model consensus-based edge detection for Kalshi weather markets.
 
-## The Edge
+## Philosophy
 
-Weather prediction markets are inefficient because:
-1. Most traders use basic weather apps (consumer forecasts)
-2. NWS provides more accurate, detailed forecasts (for free)
-3. Markets often misprice the tails (extremes)
+**Edge exists when:**
+1. Multiple weather models AGREE on a temperature (low spread)
+2. Kalshi market price DIVERGES from model consensus
 
-This scanner compares NWS point forecasts to Kalshi market prices and surfaces opportunities where the market significantly underprices the likely outcome.
+**No edge when:**
+1. Models strongly disagree (high uncertainty = skip)
+2. Market prices align with model consensus
 
-## Sample Output
-
-```
-🌡️ Weather Edge Scanner
-2026-02-25 10:00 EST
-
-MIAMI (Feb 26)
-━━━━━━━━━━━━━━━━━━━━━━━━━
-NWS Forecast: 72°F (High confidence)
-Current Market Prices:
-  69-70°F: 8c  (8% implied)
-  70-71°F: 15c (15% implied)
-  71-72°F: 19c (19% implied) ← EDGE
-  72-73°F: 22c (22% implied)
-  73-74°F: 18c (18% implied)
-
-🎯 OPPORTUNITY: 71-72°F @ 19c
-   NWS says 72°F → ~45% true probability
-   Edge: +26% (19c vs 45c fair value)
-   Recommended: BUY up to 35c
-
-CHICAGO (Feb 26)
-━━━━━━━━━━━━━━━━━━━━━━━━━
-NWS Forecast: 36°F (Medium confidence)
-No significant edge found.
-```
-
-## How It Works
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   NWS Fetch     │────▶│   Edge Calc     │────▶│   Opportunity   │
-│   (api.weather) │     │   (probability) │     │   Ranking       │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-        │                       │
-        ▼                       ▼
-┌─────────────────┐     ┌─────────────────┐
-│  Point Forecast │     │  Kalshi Prices  │
-│  + Uncertainty  │     │  (live market)  │
-└─────────────────┘     └─────────────────┘
-```
-
-## Setup
-
-### Requirements
-- Python 3.9+
-- Kalshi API credentials (for live prices)
-- No API key needed for NWS!
-
-### Configuration
+## Quick Start
 
 ```bash
-export KALSHI_EMAIL="your@email.com"
-export KALSHI_PASSWORD="your-password"
-```
+# Scan all cities for tomorrow
+python weather_edge_v2.py
 
-### Running
+# Scan today
+python weather_edge_v2.py --today
 
-```bash
-# Scan all markets
-python scanner.py
-
-# Specific city
-python scanner.py --city miami
-
-# Show all opportunities (not just high-edge)
-python scanner.py --all
+# Scan specific city/date
+python weather_edge_v2.py --city chicago --date 2026-03-06
 
 # Output as JSON
-python scanner.py --json > opportunities.json
+python weather_edge_v2.py --json
 ```
 
-## Supported Markets
+## Data Sources
 
-| City | Station | Market Pattern |
-|------|---------|----------------|
-| Miami | KMIA | HIGHMIAMI-* |
-| Chicago | KORD | HIGHCHI-* |
-| New York | KJFK | HIGHNYC-* |
-| Los Angeles | KLAX | HIGHLA-* |
-| Austin | KAUS | HIGHAUS-* |
-| Denver | KDEN | HIGHDEN-* |
+### Weather Models (5 sources)
+| Model | Source | Notes |
+|-------|--------|-------|
+| NWS | api.weather.gov | US National Weather Service, hourly forecasts |
+| ECMWF | Open-Meteo | European model, generally most accurate |
+| GFS | Open-Meteo | US Global Forecast System |
+| ICON | Open-Meteo | German model |
+| GEM | Open-Meteo | Canadian model |
 
-## Probability Model
+### Real-Time Observations
+- METAR data from Aviation Weather Center
+- Used for mid-day edge adjustments
 
-The scanner estimates true probabilities using:
+## Station Mapping
 
-1. **Point forecast** from NWS (most likely temperature)
-2. **Uncertainty range** (±2°F typical, ±3°F for >48h out)
-3. **Distribution shape** (normal, slight cold bias in winter)
+**IMPORTANT:** Kalshi uses specific measurement stations:
+
+| City | Kalshi Station | Notes |
+|------|---------------|-------|
+| Chicago | **KMDW** (Midway) | NOT O'Hare (KORD) |
+| Miami | KMIA | Miami International |
+| NYC | **Central Park** | NOT an airport! KNYC automated |
+| Austin | KAUS | Austin-Bergstrom |
+| Denver | KDEN | Denver International |
+| LA | KLAX | LAX |
+
+## Edge Criteria
+
+### Agreement Levels
+| Level | Spread | Action |
+|-------|--------|--------|
+| Strong | ≤2°F | High confidence bets |
+| Moderate | 2-4°F | Standard confidence |
+| Weak | 4-6°F | Reduce size or skip |
+| Divergent | >6°F | **SKIP** - too uncertain |
+
+### Edge Thresholds
+| Edge | Recommendation |
+|------|---------------|
+| ≥15% | **Strong Buy** |
+| ≥8% | Buy |
+| <8% | Skip (insufficient) |
+| <-15% | Avoid (overpriced) |
+
+## Output Example
+
+```
+🔍 EDGE ANALYSIS: CHICAGO - 2026-03-06
+============================================================
+
+📊 MODEL COMPARISON:
+──────────────────────────────────────────────────
+  NWS                  │  42.0°F
+  ECMWF IFS04          │  43.2°F
+  GFS SEAMLESS         │  41.8°F
+  ICON SEAMLESS        │  42.5°F
+  GEM SEAMLESS         │  42.1°F
+──────────────────────────────────────────────────
+  CONSENSUS            │  42.3°F
+  Spread               │   1.4°F
+  Agreement            │ STRONG
+
+✅ EDGE FOUND - 1 opportunity(ies):
+
+  🔥 KXHIGHCHI-06MAR26-B40.5
+     Threshold: >= 40.5°F
+     Consensus: 42.3°F | Market: 68% | Model: 85%
+     EDGE: +17.0% | Confidence: HIGH
+     → Strong edge with model consensus
+```
+
+## Bias Tracking
+
+After each settlement, update the bias model:
 
 ```python
-# Simplified probability calculation
-def probability_for_bucket(forecast, bucket_low, bucket_high, std_dev=2.0):
-    """
-    P(bucket_low <= temp < bucket_high) given forecast
-    Assumes normal distribution around point forecast
-    """
-    z_low = (bucket_low - forecast) / std_dev
-    z_high = (bucket_high - forecast) / std_dev
-    return norm.cdf(z_high) - norm.cdf(z_low)
+from weather_edge_v2 import record_settlement
+
+record_settlement(
+    city='chicago',
+    date='2026-03-05',
+    actual_high=43,
+    forecasts=[
+        {'model': 'NWS', 'high_temp': 42},
+        {'model': 'ECMWF IFS04', 'high_temp': 43.2},
+        # ... other models
+    ]
+)
 ```
 
-## Edge Threshold
-
-Default: Only show opportunities with **>15% edge**
-
-```
-Edge = True Probability - Market Implied Probability
-
-Example:
-  Market price: 19c (19% implied)
-  True probability: 45%
-  Edge: 45% - 19% = +26%
-```
-
-## Risk Management
-
-⚠️ **Trading Rules** (hard-learned):
-
-1. **Track daily HIGH, not current temp** - High happens mid-afternoon
-2. **NWS vs Market discrepancy** - Investigate WHY before betting big
-3. **Limit orders only** - Be maker, not taker
-4. **Max 10% of bankroll per bet**
-5. **Cash out early when profitable** - Weather can shift
-
-## Historical Performance
-
-| Month | Bets | Win Rate | ROI |
-|-------|------|----------|-----|
-| Jan 2026 | 12 | 67% | +18% |
-| Feb 2026 | 8 | 62% | +12% |
-
-*Track your own results in TRADE_LOG.md*
+This tracks:
+- Mean bias per model (systematic over/under forecasting)
+- MAE (Mean Absolute Error) per model
+- Historical accuracy for confidence weighting
 
 ## Files
 
-```
-weather-edge/
-├── scanner.py      # Main scanner
-├── nws.py          # NWS API client
-├── kalshi.py       # Kalshi API client
-├── probability.py  # Edge calculation
-├── config.py       # Settings
-└── README.md
-```
+| File | Purpose |
+|------|---------|
+| `weather_edge_v2.py` | Main scanner (v2 with multi-model) |
+| `bias_model_v2.json` | Model accuracy tracking |
+| `nws_forecast.py` | Legacy NWS-only scanner |
+| `edge_scanner.py` | Legacy single-model scanner |
 
-## License
+## Algorithm
 
-MIT - Use at your own risk. Past performance ≠ future results.
+1. **Fetch** forecasts from NWS + 4 Open-Meteo models
+2. **Calculate** consensus (average) and spread (disagreement)
+3. **Classify** agreement level (strong/moderate/weak/divergent)
+4. **Fetch** current Kalshi market prices
+5. **Compare** model probability vs market price
+6. **Flag** opportunities where:
+   - Agreement is strong/moderate
+   - Edge ≥ 8%
+7. **Check** current temps for mid-day adjustments
+
+## Notes
+
+- NYC is Central Park, not an airport - microclimate matters
+- Chicago uses Midway (KMDW), not O'Hare
+- Morning forecasts (before 11am) are less reliable for same-day
+- If running 3°F+ hot/cold vs expected by noon, models may be wrong
